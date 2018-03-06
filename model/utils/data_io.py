@@ -10,7 +10,7 @@ import scipy.misc
 
 from six.moves import xrange
 
-IMG_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm']
+IMG_EXTENSIONS = ['.JPEG', '.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm']
 
 class DataSet(object):
     def __init__(self, data_path, image_size=128):
