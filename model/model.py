@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import os
 import time
-from six.moves import xrange
 
 from model.utils.interpolate import *
 from model.utils.custom_ops import *
@@ -171,7 +170,7 @@ class CoopNet(object):
             f.write(str(tf.get_default_graph().as_graph_def()))
 
         # train
-        for epoch in xrange(self.num_epochs):
+        for epoch in range(self.num_epochs):
             start_time = time.time()
             for i in xrange(num_batches):
 
@@ -236,7 +235,7 @@ class CoopNet(object):
         if not os.path.exists(test_dir):
             os.makedirs(test_dir)
 
-        for i in xrange(num_batches):
+        for i in range(num_batches):
             z_vec = np.random.randn(min(sample_size, self.num_chain), self.z_size)
             g_res = sess.run(gen_res, feed_dict={self.z: z_vec})
             saveSampleResults(g_res, "%s/gen%03d.png" % (test_dir, i), col_num=self.nTileCol)
