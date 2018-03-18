@@ -7,8 +7,8 @@ import time
 
 from model.utils.interpolate import *
 from model.utils.custom_ops import *
-from model.utils.data_io import DataSet, saveSampleResults
-
+from model.utils.data_io import saveSampleResults
+from model.utils.data_io_mnist import DataSetMnist
 
 class CoopNets(object):
     def __init__(self, num_epochs=200, image_size=64, batch_size=100, nTileRow=12, nTileCol=12, net_type='object',
@@ -132,7 +132,7 @@ class CoopNets(object):
         self.build_model()
 
         # Prepare training data
-        train_data = DataSet(self.data_path, image_size=self.image_size)
+        train_data = DataSetMnist(self.data_path, image_size=self.image_size)
         num_batches = int(math.ceil(len(train_data) / self.batch_size))
 
         # initialize training

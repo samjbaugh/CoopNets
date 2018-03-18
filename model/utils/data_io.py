@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 import scipy.misc
 
-IMG_EXTENSIONS = ['.JPEG', '.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm']
+IMG_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm']
 
 class DataSet(object):
     def __init__(self, data_path, image_size=128):
@@ -18,7 +18,7 @@ class DataSet(object):
         self.image_size = image_size
         self.images = np.zeros((len(self.imgList), image_size, image_size, 3)).astype(float)
         print('Loading dataset: {}'.format(data_path))
-        for i in xrange(len(self.imgList)):
+        for i in range(len(self.imgList)):
             image = Image.open(os.path.join(self.root_dir, self.imgList[i])).convert('RGB')
             image = image.resize((self.image_size, self.image_size))
             image = np.array(image).astype(float)
