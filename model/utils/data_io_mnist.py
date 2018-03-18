@@ -12,7 +12,7 @@ class DataSetMnist(object):
         self.image_size = image_size
         self.images = np.zeros((num_images, image_size, image_size, 3)).astype(float)
         print('Loading dataset: {}'.format(data_path))
-        for i in range(len(self.imgList)):
+        for i in range(num_images):
             image = data.train.next_batch(1)[0]
             image = image.resize((self.image_size, self.image_size))
             image = np.array(image).astype(float)
