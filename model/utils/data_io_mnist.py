@@ -9,13 +9,14 @@ import numpy as np
 
 class DataSetMnist(object):
     def __init__(self, data_path, image_size=64, num_images=10000):
-        data = input_data.read_data_sets(data_path, one_hot=True)
+        self.num_images = num_images
         self.image_size = image_size
         self.images = np.zeros((num_images, image_size, image_size, 1)).astype(float)
         print('Loading dataset: {}'.format(data_path))
 
+        data = input_data.read_data_sets(data_path, one_hot=True)
         batch = data.train.next_batch(num_images)[0]
-        batch_tensor = tf.reshape(batch, [10, 28, 28, 1])
+        batch_tensor = tf.reshape(batch, [num_images, 28, 28, 1])
         images = tf.image.resize_images(batch_tensor, [image_size, image_size]).eval()
 
         for i in range(num_images):
@@ -41,4 +42,4 @@ class DataSetMnist(object):
         return self.images[index]
 
     def __len__(self):
-        return len(self.imgList)
+        return self.num_images

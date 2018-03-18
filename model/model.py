@@ -50,8 +50,8 @@ class CoopNets(object):
         elif self.type == 'object_small':
             self.z_size = 2
 
-        self.syn = tf.placeholder(shape=[None, self.image_size, self.image_size, 3], dtype=tf.float32, name='syn')
-        self.obs = tf.placeholder(shape=[None, self.image_size, self.image_size, 3], dtype=tf.float32, name='obs')
+        self.syn = tf.placeholder(shape=[None, self.image_size, self.image_size, 1], dtype=tf.float32, name='syn')
+        self.obs = tf.placeholder(shape=[None, self.image_size, self.image_size, 1], dtype=tf.float32, name='obs')
         self.z = tf.placeholder(shape=[None, self.z_size], dtype=tf.float32, name='z')
 
     def build_model(self):
@@ -102,7 +102,7 @@ class CoopNets(object):
             return tf.less(i, self.t1)
 
         def body(i, syn):
-            noise = tf.random_normal(shape=[self.num_chain, self.image_size, self.image_size, 3], name='noise')
+            noise = tf.random_normal(shape=[self.num_chain, self.image_size, self.image_size, 1], name='noise')
             syn_res = self.descriptor(syn, reuse=True)
             grad = tf.gradients(syn_res, syn, name='grad_des')[0]
             syn = syn - 0.5 * self.delta1 * self.delta1 * (syn / self.sigma1 / self.sigma1 - grad) + self.delta1 * noise
@@ -267,7 +267,7 @@ class CoopNets(object):
                 convt4 = tf.contrib.layers.batch_norm(convt4, is_training=is_training)
                 convt4 = leaky_relu(convt4)
 
-                convt5 = convt2d(convt4, (None, self.image_size, self.image_size, 3), kernal=(5, 5)
+                convt5 = convt2d(convt4, (None, self.image_size, self.image_size, 1), kernal=(5, 5)
                                  , strides=(2, 2), padding="SAME", name="convt5")
                 convt5 = tf.nn.tanh(convt5)
 

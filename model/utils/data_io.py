@@ -71,7 +71,7 @@ def img2cell(images, row_num=10, col_num=10, margin_syn=2):
     [num_images, image_size] = images.shape[0:2]
     num_cells = int(math.ceil(num_images / (col_num * row_num)))
     cell_image = np.zeros((num_cells, row_num * image_size + (row_num-1)*margin_syn,
-                           col_num * image_size + (col_num-1)*margin_syn, 3))
+                           col_num * image_size + (col_num-1)*margin_syn))
     for i in range(num_images):
         cell_id = int(math.floor(i / (col_num * row_num)))
         idx = i % (col_num * row_num)
@@ -80,11 +80,11 @@ def img2cell(images, row_num=10, col_num=10, margin_syn=2):
         temp = clip_by_value(np.squeeze(images[i]), -1, 1)
         temp = (temp + 1) / 2 * 255
         temp = clip_by_value(np.round(temp), min=0, max=255)
-        gLow = np.min(temp, axis=(0, 1, 2))
-        gHigh = np.max(temp, axis=(0, 1, 2))
+        gLow = np.min(temp, axis=(0, 1))
+        gHigh = np.max(temp, axis=(0, 1))
         temp = (temp - gLow) / (gHigh - gLow)
         cell_image[cell_id, (image_size+margin_syn)*ir:image_size + (image_size+margin_syn)*ir,
-                    (image_size+margin_syn)*ic:image_size + (image_size+margin_syn)*ic,:] = temp
+                    (image_size+margin_syn)*ic:image_size + (image_size+margin_syn)*ic] = temp
     return cell_image
 
 def saveSampleResults(sample_results, filename, col_num=10, margin_syn=2):
