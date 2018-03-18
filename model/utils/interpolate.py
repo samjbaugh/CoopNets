@@ -24,7 +24,7 @@ def linear_interpolator(z, npairs=8, ninterp=8):
     z_dim = z.shape[1]
     interp_z = np.zeros(shape=(npairs * ninterp, z_dim))
     line_points = np.expand_dims(np.linspace(0, 1, ninterp), 0)
-    for ip in xrange(npairs):
+    for ip in range(npairs):
         pair = np.random.permutation(num_z)
         l_z = z[np.newaxis, pair[0]]
         r_z = z[np.newaxis, pair[1]]
@@ -44,7 +44,7 @@ def sphere_interpolator(z, n_phi=8, n_theta=8):
     ru_z = z[np.newaxis, corner_idx[1]]
     ld_z = z[np.newaxis, corner_idx[2]]
     rd_z = z[np.newaxis, corner_idx[3]]
-    for i in xrange(n_theta):
+    for i in range(n_theta):
         temp = np.matmul(np.cos(theta_points[i]) * np.cos(phi_points).transpose(), lu_z) \
                + np.matmul(np.cos(theta_points[i]) * np.sin(phi_points).transpose(), ru_z) \
                + np.matmul(np.sin(theta_points[i]) * np.cos(phi_points).transpose(), ld_z) \

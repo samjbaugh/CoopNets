@@ -8,8 +8,6 @@ import numpy as np
 from PIL import Image
 import scipy.misc
 
-from six.moves import xrange
-
 IMG_EXTENSIONS = ['.JPEG', '.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm']
 
 class DataSet(object):
