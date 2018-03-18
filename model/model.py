@@ -10,11 +10,13 @@ from model.utils.custom_ops import *
 from model.utils.data_io import DataSet, saveSampleResults
 
 
-class CoopNet(object):
-    def __init__(self, num_epochs=200, image_size=64, batch_size=100, nTileRow=12, nTileCol=12, d_lr=0.001, g_lr=0.0001,
-                 beta1=0.5, gen_refsig=0.3, des_refsig=0.016, des_step_size=0.002, des_sample_steps=10,
-                 gen_step_size=0.1, gen_sample_steps=0, net_type='object', log_step=10,
-                 data_path='/tmp/data/', category='rock', output_dir='./output'):
+class CoopNets(object):
+    def __init__(self, num_epochs=200, image_size=64, batch_size=100, nTileRow=12, nTileCol=12, net_type='object',
+                 d_lr=0.001, g_lr=0.0001, beta1=0.5,
+                 des_step_size=0.002, des_sample_steps=10, des_refsig=0.016,
+                 gen_step_size=0.1, gen_sample_steps=0, gen_refsig=0.3,
+                 data_path='/tmp/data/', log_step=10, category='rock',
+                 sample_dir='./synthesis', model_dir='./checkpoints', log_dir='./log', test_dir='./test'):
         self.type = net_type
         self.num_epochs = num_epochs
         self.batch_size = batch_size
@@ -35,28 +37,11 @@ class CoopNet(object):
 
         self.data_path = os.path.join(data_path, category)
         self.log_step = log_step
-        self.output_dir = os.path.join(output_dir, category)
 
-        self.log_dir = os.path.join(self.output_dir, 'log')
-        self.sample_dir = os.path.join(self.output_dir, 'synthesis')
-        self.interp_dir = os.path.join(self.output_dir, 'interpolation')
-        self.model_dir = os.path.join(self.output_dir, 'checkpoints')
-
-        if tf.gfile.Exists(self.log_dir):
-            tf.gfile.DeleteRecursively(self.log_dir)
-        tf.gfile.MakeDirs(self.log_dir)
-
-        if tf.gfile.Exists(self.sample_dir):
-            tf.gfile.DeleteRecursively(self.sample_dir)
-        tf.gfile.MakeDirs(self.sample_dir)
-
-        if tf.gfile.Exists(self.interp_dir):
-            tf.gfile.DeleteRecursively(self.interp_dir)
-        tf.gfile.MakeDirs(self.interp_dir)
-
-        if tf.gfile.Exists(self.model_dir):
-            tf.gfile.DeleteRecursively(self.model_dir)
-        tf.gfile.MakeDirs(self.model_dir)
+        self.log_dir = log_dir
+        self.sample_dir = sample_dir
+        self.model_dir = model_dir
+        self.test_dir = test_dir
 
         if self.type == 'texture':
             self.z_size = 49
@@ -101,6 +86,10 @@ class CoopNet(object):
         gen_grads_vars = gen_optim.compute_gradients(self.gen_loss, var_list=gen_vars)
         gen_grads = [tf.reduce_mean(tf.abs(grad)) for (grad, var) in gen_grads_vars if '/w' in var.name]
         self.apply_g_grads = gen_optim.apply_gradients(gen_grads_vars)
+
+        # symbolic langevins
+        self.langevin_descriptor = self.langevin_dynamics_descriptor(self.syn)
+        self.langevin_generator = self.langevin_dynamics_generator(self.z)
 
         tf.summary.scalar('des_loss', self.des_loss_mean)
         tf.summary.scalar('gen_loss', self.gen_loss_mean)
@@ -156,23 +145,17 @@ class CoopNet(object):
 
         writer = tf.summary.FileWriter(self.log_dir, sess.graph)
 
-        # symbolic langevins
-        langevin_descriptor = self.langevin_dynamics_descriptor(self.syn)
-        langevin_generator = self.langevin_dynamics_generator(self.z)
-
         # make graph immutable
         tf.get_default_graph().finalize()
 
         # store graph in protobuf
-        if not os.path.exists(self.model_dir):
-            os.makedirs(self.model_dir)
         with open(self.model_dir + '/graph.proto', 'w') as f:
             f.write(str(tf.get_default_graph().as_graph_def()))
 
         # train
         for epoch in range(self.num_epochs):
             start_time = time.time()
-            for i in xrange(num_batches):
+            for i in range(num_batches):
 
                 obs_data = train_data[i * self.batch_size:min(len(train_data), (i + 1) * self.batch_size)]
 
@@ -181,10 +164,10 @@ class CoopNet(object):
                 g_res = sess.run(self.gen_res, feed_dict={self.z: z_vec})
                 # Step D1: obtain synthesized images Y
                 if self.t1 > 0:
-                    syn = sess.run(langevin_descriptor, feed_dict={self.syn: g_res})
+                    syn = sess.run(self.langevin_descriptor, feed_dict={self.syn: g_res})
                 # Step G1: update X using Y as training image
                 if self.t2 > 0:
-                    z_vec = sess.run(langevin_generator, feed_dict={self.z: z_vec, self.obs: syn})
+                    z_vec = sess.run(self.langevin_generator, feed_dict={self.z: z_vec, self.obs: syn})
                 # Step D2: update D net
                 d_loss = sess.run([self.des_loss, self.des_loss_update, self.apply_d_grads],
                                   feed_dict={self.obs: obs_data, self.syn: syn})[0]
@@ -231,19 +214,15 @@ class CoopNet(object):
         saver.restore(sess, ckpt)
         print('Loading checkpoint {}.'.format(ckpt))
 
-        test_dir = os.path.join(self.output_dir, 'test')
-        if not os.path.exists(test_dir):
-            os.makedirs(test_dir)
-
         for i in range(num_batches):
             z_vec = np.random.randn(min(sample_size, self.num_chain), self.z_size)
             g_res = sess.run(gen_res, feed_dict={self.z: z_vec})
-            saveSampleResults(g_res, "%s/gen%03d.png" % (test_dir, i), col_num=self.nTileCol)
+            saveSampleResults(g_res, "%s/gen%03d.png" % (self.test_dir, i), col_num=self.nTileCol)
 
             # output interpolation results
             interp_z = linear_interpolator(z_vec, npairs=self.nTileRow, ninterp=self.nTileCol)
             interp = sess.run(gen_res, feed_dict={self.z: interp_z})
-            saveSampleResults(interp, "%s/interp%03d.png" % (test_dir, i), col_num=self.nTileCol)
+            saveSampleResults(interp, "%s/interp%03d.png" % (self.test_dir, i), col_num=self.nTileCol)
             sample_size = sample_size - self.num_chain
 
     def descriptor(self, inputs, reuse=False):
