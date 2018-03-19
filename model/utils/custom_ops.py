@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import tensorflow as tf
 
+tf.GraphKeys.PARAMS = 'params'
 
 def leaky_relu(input_, leakiness=0.2):
     assert leakiness <= 1
@@ -33,6 +34,10 @@ def conv2d(input_, output_dim, kernal=(5, 5), strides=(2, 2), padding='SAME', ac
         conv = tf.nn.bias_add(conv, biases)
         if activate_fn:
             conv = activate_fn(conv)
+
+        tf.add_to_collection(tf.GraphKeys.PARAMS, w)
+        tf.add_to_collection(tf.GraphKeys.PARAMS, biases)
+
         return conv
 
 def fully_connected(input_, output_dim, name="fc"):
