@@ -57,8 +57,8 @@ class CoopNets(object):
     def build_model(self):
         self.gen_res = self.generator(self.z, reuse=False)
 
-        obs_res = self.descriptor(self.obs, reuse=False)
-        syn_res = self.descriptor(self.syn, reuse=True)
+        obs_res = self.descriptor(self.obs)
+        syn_res = self.descriptor(self.syn)
 
         self.recon_err = tf.reduce_mean(
             tf.pow(tf.subtract(tf.reduce_mean(self.syn, axis=0), tf.reduce_mean(self.obs, axis=0)), 2))
@@ -225,8 +225,8 @@ class CoopNets(object):
             saveSampleResults(interp, "%s/interp%03d.png" % (self.test_dir, i), col_num=self.nTileCol)
             sample_size = sample_size - self.num_chain
 
-    def descriptor(self, inputs, reuse=False):
-        with tf.variable_scope('des', reuse=reuse):
+    def descriptor(self, inputs):
+        with tf.variable_scope('des', reuse=tf.AUTO_REUSE):
             if self.type == 'object':
                 conv1 = conv2d(inputs, 64, kernal=(5, 5), strides=(2, 2), padding="SAME", activate_fn=leaky_relu,
                                name="conv1")
