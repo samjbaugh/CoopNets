@@ -11,7 +11,7 @@ FLAGS = tf.app.flags.FLAGS
 tf.flags.DEFINE_integer('image_size', 64, 'Image size to rescale images')
 tf.flags.DEFINE_integer('batch_size', 100, 'Batch size of training images')
 #tf.flags.DEFINE_integer('num_epochs', 20, 'Number of epochs to train')
-tf.flags.DEFINE_integer('num_epochs', 1, 'Number of epochs to train')
+tf.flags.DEFINE_integer('num_epochs', 0, 'Number of epochs to train')
 tf.flags.DEFINE_integer('nTileRow', 12, 'Row number of synthesized images')
 tf.flags.DEFINE_integer('nTileCol', 12, 'Column number of synthesized images')
 tf.flags.DEFINE_float('beta1', 0.5, 'Momentum term of adam')
@@ -90,9 +90,8 @@ def main(_):
             saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.PARAMS))
             saver.save(sess, "./models/net-%d/model" % k)
 
-            # free
-            tf.reset_default_graph()
-            sess.close()
+        # free
+        tf.reset_default_graph()
 
 
 if __name__ == '__main__':

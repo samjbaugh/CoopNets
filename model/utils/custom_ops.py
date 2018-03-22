@@ -5,6 +5,7 @@ from __future__ import print_function
 import tensorflow as tf
 
 tf.GraphKeys.PARAMS = 'params'
+tf.GraphKeys.W = 'W_des'
 
 def leaky_relu(input_, leakiness=0.2):
     assert leakiness <= 1
@@ -35,8 +36,15 @@ def conv2d(input_, output_dim, kernal=(5, 5), strides=(2, 2), padding='SAME', ac
         if activate_fn:
             conv = activate_fn(conv)
 
-        tf.add_to_collection(tf.GraphKeys.PARAMS, w)
-        tf.add_to_collection(tf.GraphKeys.PARAMS, biases)
+        if not w in tf.get_collection(tf.GraphKeys.PARAMS):
+            tf.add_to_collection(tf.GraphKeys.PARAMS, w)
+        if not biases in tf.get_collection(tf.GraphKeys.PARAMS):
+            tf.add_to_collection(tf.GraphKeys.PARAMS, biases)
+
+        if not w in tf.get_collection(tf.GraphKeys.W):
+            tf.add_to_collection(tf.GraphKeys.W, w)
+        #if not biases in tf.get_collection(tf.GraphKeys.W):
+        #    tf.add_to_collection(tf.GraphKeys.W, biases)
 
         return conv
 
@@ -76,4 +84,11 @@ def convt2d(input_, output_shape, kernal=(5, 5), strides=(2, 2), padding='SAME',
         convt = tf.nn.bias_add(convt, biases)
         if activate_fn:
             convt = activate_fn(convt)
+
+
+        if not w in tf.get_collection(tf.GraphKeys.PARAMS):
+            tf.add_to_collection(tf.GraphKeys.PARAMS, w)
+        if not biases in tf.get_collection(tf.GraphKeys.PARAMS):
+            tf.add_to_collection(tf.GraphKeys.PARAMS, biases)
+
         return convt

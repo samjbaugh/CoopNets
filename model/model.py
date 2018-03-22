@@ -146,7 +146,7 @@ class CoopNets(object):
         writer = tf.summary.FileWriter(self.log_dir, sess.graph)
 
         # make graph immutable
-        tf.get_default_graph().finalize()
+        #tf.get_default_graph().finalize()
 
         # store graph in protobuf
         with open(self.model_dir + '/graph.proto', 'w') as f:
@@ -200,6 +200,8 @@ class CoopNets(object):
                 if not os.path.exists(self.model_dir):
                     os.makedirs(self.model_dir)
                 saver.save(sess, "%s/%s" % (self.model_dir, 'model.ckpt'), global_step=epoch)
+
+        saver.save(sess, "%s/%s" % (self.model_dir, 'final.ckpt'))
 
     def test(self, sess, ckpt, sample_size):
         assert ckpt is not None, 'no checkpoint provided.'
