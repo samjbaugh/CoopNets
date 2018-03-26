@@ -17,7 +17,7 @@ First, download Imagenet-scene dataset and save it to `./data` directory:
 
 To train a model with ***alp*** dataset:
 
-    $ python main.py --category alp --data_dir ./data/scene --output_dir ./output --num_epochs 200 --batch_size 100 --d_lr 0.01 --g_lr 0.0001
+    $ python main.py --category alp --data_dir ./data/scene --output_dir ./output --num_epochs 300 --batch_size 100 --d_lr 0.01 --g_lr 0.0001
 synthesized results will be saved in `./output/alp/synthesis`
 
 To test generator by synthesizing interpolation results with trained model:
@@ -26,7 +26,7 @@ To test generator by synthesizing interpolation results with trained model:
 testing results will be saved in `./output/alp/test`
 
 ## Results
-### Results of MIT Place205 dataset
+### Results of [MIT Place205](http://places.csail.mit.edu) dataset
 **Descriptor result**
 ![descriptor](assets/descriptor.png)
 
