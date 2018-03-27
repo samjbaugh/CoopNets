@@ -22,6 +22,7 @@ def init_root_log():
 def init_tf_log(path):
     log = logging.getLogger('tensorflow')
     log.setLevel(logging.INFO)
+    log.handlers = []
 
     formatter = logging.Formatter('%(message)s')
 

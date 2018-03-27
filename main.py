@@ -36,6 +36,7 @@ tf.flags.DEFINE_integer('sample_size', 144, 'Number of images to generate during
 
 
 def main(_):
+
     run_name = datetime.now().strftime('%Y:%m:%d:%H:%M:%S')
 
     output_dir = os.path.join(FLAGS.output_dir, FLAGS.category, run_name)
@@ -44,6 +45,7 @@ def main(_):
     model_dir = make_dir(os.path.join(output_dir, 'checkpoints'))
     test_dir = make_dir(os.path.join(output_dir, 'test'))
 
+    init_root_log()
     init_tf_log(os.path.join(output_dir, 'log', 'output.log'))
 
     model = CoopNets(
@@ -68,5 +70,4 @@ def main(_):
 
 
 if __name__ == '__main__':
-    init_root_log()
     tf.app.run()
