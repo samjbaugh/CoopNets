@@ -15,13 +15,12 @@ from util.tf import get_lr
 
 
 class CoopNets(object):
-    def __init__(self, num_epochs=200, image_size=64, batch_size=100, n_tile_row=12, n_tile_col=12, net_type='object',
+    def __init__(self, num_epochs=200, image_size=64, batch_size=100, n_tile_row=12, n_tile_col=12,
                  d_lr=0.001, g_lr=0.0001, beta1=0.5,
                  des_step_size=0.002, des_sample_steps=10, des_refsig=0.016,
                  gen_step_size=0.1, gen_sample_steps=0, gen_refsig=0.3,
                  data_path='/tmp/data/', log_step=10, category='rock',
                  sample_dir='./synthesis', model_dir='./checkpoints', log_dir='./log', test_dir='./test'):
-        self.type = net_type
         self.num_epochs = num_epochs
         self.batch_size = batch_size
         self.image_size = image_size
