@@ -13,6 +13,7 @@ from util.images import save_sample_results
 from util.io import make_dir
 from util.tf import get_lr
 
+
 class CoopNets(object):
     def __init__(self, num_epochs=200, image_size=64, batch_size=100, n_tile_row=12, n_tile_col=12, net_type='object',
                  d_lr=0.001, g_lr=0.0001, beta1=0.5,

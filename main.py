@@ -36,7 +36,6 @@ tf.flags.DEFINE_integer('sample_size', 144, 'Number of images to generate during
 
 
 def main(_):
-
     run_name = datetime.now().strftime('%Y:%m:%d:%H:%M:%S')
 
     output_dir = os.path.join(FLAGS.output_dir, FLAGS.category, run_name)
