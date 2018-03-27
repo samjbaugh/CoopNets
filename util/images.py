@@ -3,6 +3,7 @@ import math
 import numpy as np
 import scipy.misc
 
+
 def cell2img(cell_image, image_size=100, margin_syn=2):
     num_cols = cell_image.shape[1] // image_size
     num_rows = cell_image.shape[0] // image_size

@@ -73,7 +73,7 @@ class CoopNets(object):
 
         # generator variables
         gen_vars = [var for var in tf.trainable_variables() if var.name.startswith('gen')]
-        self.gen_loss = tf.reduce_mean(1.0 / (2 * self.sigma2 * self.sigma2) * tf.square(self.obs - self.gen_res),axis=0)
+        self.gen_loss = tf.reduce_mean(1.0 / (2 * self.sigma2 * self.sigma2) * tf.square(self.obs - self.gen_res), axis=0)
         self.gen_loss_mean, self.gen_loss_update = tf.contrib.metrics.streaming_mean(self.gen_loss)
         gen_optim = tf.train.AdamOptimizer(self.g_lr, beta1=self.beta1)
         gen_grads_vars = gen_optim.compute_gradients(self.gen_loss, var_list=gen_vars)
