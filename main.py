@@ -6,7 +6,7 @@ import os
 import tensorflow as tf
 
 from model.model import CoopNets
-from
+from util.util import make_dir
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -70,6 +70,7 @@ def main(_):
             make_dir(model_dir)
 
             model.train(sess)
+
 
 if __name__ == '__main__':
     tf.app.run()
