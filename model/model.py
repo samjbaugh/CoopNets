@@ -1,7 +1,3 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import os
 import time
 import math
@@ -55,7 +51,6 @@ class CoopNets(object):
         self.obs = tf.placeholder(shape=[None, self.image_size, self.image_size, 3], dtype=tf.float32, name='obs')
         self.z = tf.placeholder(shape=[None, self.z_size], dtype=tf.float32, name='z')
 
-    def build_model(self):
         self.gen_res = self.generator(self.z)
 
         obs_res = self.descriptor(self.obs)
@@ -125,7 +120,8 @@ class CoopNets(object):
             return z
 
     def train(self, sess):
-        self.build_model()
+
+        tf.reset_default_graph()
 
         # Prepare training data
         train_data = DataSet(self.data_path, image_size=self.image_size)
@@ -187,7 +183,7 @@ class CoopNets(object):
             [des_loss_avg, gen_loss_avg, mse_avg, summary] = sess.run([self.des_loss_mean, self.gen_loss_mean,
                                                                        self.recon_err_mean, self.summary_op])
             end_time = time.time()
-            print('Epoch #{:d}, avg.descriptor loss: {:.4f}, avg.generator loss: {:.4f}, avg.L2 distance: {:4.4f}, '
+            tf.logging.info('Epoch #{:d}, avg.descriptor loss: {:.4f}, avg.generator loss: {:.4f}, avg.L2 distance: {:4.4f}, '
                   'time: {:.2f}s'.format(epoch, des_loss_avg, gen_loss_avg, mse_avg, end_time - start_time))
             writer.add_summary(summary, epoch)
             writer.flush()
