@@ -35,9 +35,10 @@ def conv2d(input_, output_dim, kernal=(5, 5), strides=(2, 2), padding='SAME', ac
             conv = activate_fn(conv)
         return conv
 
+
 def fully_connected(input_, output_dim, name="fc"):
-    shape = input_.shape
-    return conv2d(input_, output_dim, kernal=list(shape[1:3]), strides=(1, 1), padding="VALID", name=name)
+    return conv2d(input_, output_dim, kernal=list(input_.shape[1:3]), strides=(1, 1), padding="VALID", name=name)
+
 
 def convt2d(input_, output_shape, kernal=(5, 5), strides=(2, 2), padding='SAME', activate_fn=None, name="convt2d"):
     assert type(kernal) in [list, tuple, int]

@@ -7,23 +7,23 @@ import time
 
 from model.interpolate import *
 from model.custom_ops import *
-from model.data_io import DataSet, saveSampleResults
+from util.data_images import DataSet
+from util.util import save_sample_results
 
 
 class CoopNets(object):
-    def __init__(self, num_epochs=200, image_size=64, batch_size=100, nTileRow=12, nTileCol=12, net_type='object',
+    def __init__(self, num_epochs=200, image_size=64, batch_size=100, n_tile_row=12, n_tile_col=12,
                  d_lr=0.001, g_lr=0.0001, beta1=0.5,
                  des_step_size=0.002, des_sample_steps=10, des_refsig=0.016,
                  gen_step_size=0.1, gen_sample_steps=0, gen_refsig=0.3,
                  data_path='/tmp/data/', log_step=10, category='rock',
                  sample_dir='./synthesis', model_dir='./checkpoints', log_dir='./log', test_dir='./test'):
-        self.type = net_type
         self.num_epochs = num_epochs
         self.batch_size = batch_size
         self.image_size = image_size
-        self.nTileRow = nTileRow
-        self.nTileCol = nTileCol
-        self.num_chain = nTileRow * nTileCol
+        self.n_tile_row = n_tile_row
+        self.n_tile_col = n_tile_col
+        self.num_chain = n_tile_row * n_tile_col
         self.beta1 = beta1
 
         self.d_lr = d_lr
@@ -43,12 +43,7 @@ class CoopNets(object):
         self.model_dir = model_dir
         self.test_dir = test_dir
 
-        if self.type == 'texture':
-            self.z_size = 49
-        elif self.type == 'object':
-            self.z_size = 100
-        elif self.type == 'object_small':
-            self.z_size = 2
+        self.z_size = 100
 
         self.syn = tf.placeholder(shape=[None, self.image_size, self.image_size, 3], dtype=tf.float32, name='syn')
         self.obs = tf.placeholder(shape=[None, self.image_size, self.image_size, 3], dtype=tf.float32, name='obs')
@@ -176,8 +171,8 @@ class CoopNets(object):
                 if i == 0 and epoch % self.log_step == 0:
                     if not os.path.exists(self.sample_dir):
                         os.makedirs(self.sample_dir)
-                    saveSampleResults(syn, "%s/des%03d.png" % (self.sample_dir, epoch), col_num=self.nTileCol)
-                    saveSampleResults(g_res, "%s/gen%03d.png" % (self.sample_dir, epoch), col_num=self.nTileCol)
+                    save_sample_results(syn, "%s/des%03d.png" % (self.sample_dir, epoch), col_num=self.n_tile_col)
+                    save_sample_results(g_res, "%s/gen%03d.png" % (self.sample_dir, epoch), col_num=self.n_tile_col)
 
             [des_loss_avg, gen_loss_avg, mse_avg, summary] = sess.run([self.des_loss_mean, self.gen_loss_mean,
                                                                        self.recon_err_mean, self.summary_op])
@@ -208,60 +203,54 @@ class CoopNets(object):
         for i in range(num_batches):
             z_vec = np.random.randn(min(sample_size, self.num_chain), self.z_size)
             g_res = sess.run(gen_res, feed_dict={self.z: z_vec})
-            saveSampleResults(g_res, "%s/gen%03d.png" % (self.test_dir, i), col_num=self.nTileCol)
+            save_sample_results(g_res, "%s/gen%03d.png" % (self.test_dir, i), col_num=self.n_tile_col)
 
             # output interpolation results
-            interp_z = linear_interpolator(z_vec, npairs=self.nTileRow, ninterp=self.nTileCol)
+            interp_z = linear_interpolator(z_vec, npairs=self.n_tile_row, ninterp=self.n_tile_col)
             interp = sess.run(gen_res, feed_dict={self.z: interp_z})
-            saveSampleResults(interp, "%s/interp%03d.png" % (self.test_dir, i), col_num=self.nTileCol)
+            save_sample_results(interp, "%s/interp%03d.png" % (self.test_dir, i), col_num=self.n_tile_col)
             sample_size = sample_size - self.num_chain
 
     def descriptor(self, inputs):
         with tf.variable_scope('des', reuse=tf.AUTO_REUSE):
-            if self.type == 'object':
-                conv1 = conv2d(inputs, 64, kernal=(5, 5), strides=(2, 2), padding="SAME", activate_fn=leaky_relu,
-                               name="conv1")
+            conv1 = conv2d(inputs, 64, kernal=(5, 5), strides=(2, 2), padding="SAME", activate_fn=leaky_relu,
+                           name="conv1")
 
-                conv2 = conv2d(conv1, 128, kernal=(3, 3), strides=(2, 2), padding="SAME", activate_fn=leaky_relu,
-                               name="conv2")
+            conv2 = conv2d(conv1, 128, kernal=(3, 3), strides=(2, 2), padding="SAME", activate_fn=leaky_relu,
+                           name="conv2")
 
-                conv3 = conv2d(conv2, 256, kernal=(3, 3), strides=(1, 1), padding="SAME", activate_fn=leaky_relu,
-                               name="conv3")
+            conv3 = conv2d(conv2, 256, kernal=(3, 3), strides=(1, 1), padding="SAME", activate_fn=leaky_relu,
+                           name="conv3")
 
-                fc = fully_connected(conv3, 100, name="fc")
+            fc = fully_connected(conv3, 100, name="fc")
 
-                return fc
-            else:
-                return NotImplementedError
+            return fc
 
     def generator(self, inputs, is_training=True):
         with tf.variable_scope('gen', reuse=tf.AUTO_REUSE):
-            if self.type == 'object':
-                inputs = tf.reshape(inputs, [-1, 1, 1, self.z_size])
-                convt1 = convt2d(inputs, (None, self.image_size // 16, self.image_size // 16, 512), kernal=(4, 4)
-                                 , strides=(1, 1), padding="VALID", name="convt1")
-                convt1 = tf.contrib.layers.batch_norm(convt1, is_training=is_training)
-                convt1 = leaky_relu(convt1)
+            inputs = tf.reshape(inputs, [-1, 1, 1, self.z_size])
+            convt1 = convt2d(inputs, (None, self.image_size // 16, self.image_size // 16, 512), kernal=(4, 4)
+                             , strides=(1, 1), padding="VALID", name="convt1")
+            convt1 = tf.contrib.layers.batch_norm(convt1, is_training=is_training)
+            convt1 = leaky_relu(convt1)
 
-                convt2 = convt2d(convt1, (None, self.image_size // 8, self.image_size // 8, 256), kernal=(5, 5)
-                                 , strides=(2, 2), padding="SAME", name="convt2")
-                convt2 = tf.contrib.layers.batch_norm(convt2, is_training=is_training)
-                convt2 = leaky_relu(convt2)
+            convt2 = convt2d(convt1, (None, self.image_size // 8, self.image_size // 8, 256), kernal=(5, 5)
+                             , strides=(2, 2), padding="SAME", name="convt2")
+            convt2 = tf.contrib.layers.batch_norm(convt2, is_training=is_training)
+            convt2 = leaky_relu(convt2)
 
-                convt3 = convt2d(convt2, (None, self.image_size // 4, self.image_size // 4, 128), kernal=(5, 5)
-                                 , strides=(2, 2), padding="SAME", name="convt3")
-                convt3 = tf.contrib.layers.batch_norm(convt3, is_training=is_training)
-                convt3 = leaky_relu(convt3)
+            convt3 = convt2d(convt2, (None, self.image_size // 4, self.image_size // 4, 128), kernal=(5, 5)
+                             , strides=(2, 2), padding="SAME", name="convt3")
+            convt3 = tf.contrib.layers.batch_norm(convt3, is_training=is_training)
+            convt3 = leaky_relu(convt3)
 
-                convt4 = convt2d(convt3, (None, self.image_size // 2, self.image_size // 2, 64), kernal=(5, 5)
-                                 , strides=(2, 2), padding="SAME", name="convt4")
-                convt4 = tf.contrib.layers.batch_norm(convt4, is_training=is_training)
-                convt4 = leaky_relu(convt4)
+            convt4 = convt2d(convt3, (None, self.image_size // 2, self.image_size // 2, 64), kernal=(5, 5)
+                             , strides=(2, 2), padding="SAME", name="convt4")
+            convt4 = tf.contrib.layers.batch_norm(convt4, is_training=is_training)
+            convt4 = leaky_relu(convt4)
 
-                convt5 = convt2d(convt4, (None, self.image_size, self.image_size, 3), kernal=(5, 5)
-                                 , strides=(2, 2), padding="SAME", name="convt5")
-                convt5 = tf.nn.tanh(convt5)
+            convt5 = convt2d(convt4, (None, self.image_size, self.image_size, 3), kernal=(5, 5)
+                             , strides=(2, 2), padding="SAME", name="convt5")
+            convt5 = tf.nn.tanh(convt5)
 
-                return convt5
-            else:
-                return NotImplementedError
+            return convt5
