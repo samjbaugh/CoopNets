@@ -1,40 +1,7 @@
-import sys
 import math
-import logging
 
 import numpy as np
-import tensorflow as tf
 import scipy.misc
-
-
-def init_log(path):
-    log = logging.getLogger()
-    log.setLevel(logging.INFO)
-
-    formatter_cs = logging.Formatter('%(message)s')
-
-    cs = logging.StreamHandler(sys.stdout)
-    cs.setLevel(logging.INFO)
-    cs.setFormatter(formatter_cs)
-    log.addHandler(cs)
-
-    log = logging.getLogger('tensorflow')
-    log.setLevel(logging.INFO)
-    log.handlers = []
-
-    formatter_fh = logging.Formatter('%(asctime)s - %(message)s')
-
-    fh = logging.FileHandler(path)
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(formatter_fh)
-    log.addHandler(fh)
-
-
-def make_dir(dir):
-    if not tf.gfile.Exists(dir):
-        tf.gfile.MakeDirs(dir)
-    return dir
-
 
 def cell2img(cell_image, image_size=100, margin_syn=2):
     num_cols = cell_image.shape[1] // image_size

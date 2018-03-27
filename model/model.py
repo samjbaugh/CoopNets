@@ -7,10 +7,11 @@ import tensorflow as tf
 
 from model.interpolate import linear_interpolator
 from model.custom_ops import leaky_relu, conv2d, convt2d, fully_connected
-from util.data_images import DataSet
+from util.dataset import DataSet
 
-from util.util import save_sample_results, make_dir
-
+from util.images import save_sample_results
+from util.io import make_dir
+from util.tf import get_lr
 
 class CoopNets(object):
     def __init__(self, num_epochs=200, image_size=64, batch_size=100, n_tile_row=12, n_tile_col=12, net_type='object',
@@ -76,6 +77,10 @@ class CoopNets(object):
         gen_optim = tf.train.AdamOptimizer(self.g_lr, beta1=self.beta1)
         gen_grads_vars = gen_optim.compute_gradients(self.gen_loss, var_list=gen_vars)
         self.apply_g_grads = gen_optim.apply_gradients(gen_grads_vars)
+
+        # learning rates
+        self.lr_des = get_lr(des_optim)
+        self.lr_gen = get_lr(gen_optim)
 
         # symbolic langevins
         self.langevin_descriptor = self.langevin_dynamics_descriptor(self.syn)
@@ -169,12 +174,10 @@ class CoopNets(object):
                 g_loss = sess.run([self.gen_loss, self.gen_loss_update, self.apply_g_grads],
                                   feed_dict={self.obs: syn, self.z: z_vec})[0]
 
-                # Compute MSE
-                mse = sess.run([self.recon_err, self.recon_err_update],
-                               feed_dict={self.obs: obs_data, self.syn: syn})[0]
-
+                # Metrics
+                mse = sess.run([self.recon_err, self.recon_err_update], feed_dict={self.obs: obs_data, self.syn: syn})[0]
                 sample_results[i * self.num_chain:(i + 1) * self.num_chain] = syn
-                tf.logging.debug('Epoch #{:d}, [{:2d}]/[{:2d}], descriptor loss: {:.4f}, generator loss: {:.4f}, '
+                tf.logging.debug('Epoch #{:d}, [{:2d}]/[{:2d}], des loss: {:.4f}, gen loss: {:.4f}, '
                           'L2 distance: {:4.4f}'.format(epoch, i + 1, num_batches, d_loss.mean(), g_loss.mean(), mse))
                 if i == 0 and epoch % self.log_step == 0:
                     save_sample_results(syn, "%s/des%03d.png" % (self.sample_dir, epoch), col_num=self.n_tile_col)
@@ -182,9 +185,11 @@ class CoopNets(object):
 
             [des_loss_avg, gen_loss_avg, mse_avg, summary] = sess.run([self.des_loss_mean, self.gen_loss_mean,
                                                                        self.recon_err_mean, self.summary_op])
+
             end_time = time.time()
-            tf.logging.info('Epoch #{:d}, avg.descriptor loss: {:.4f}, avg.generator loss: {:.4f}, avg.L2 distance: {:4.4f}, '
-                  'time: {:.2f}s'.format(epoch, des_loss_avg, gen_loss_avg, mse_avg, end_time - start_time))
+            tf.logging.info('Epoch #{:d}, avg.des loss: {:.4f}, avg.gen loss: {:.4f}, avg.L2 distance: {:4.4f}, '
+                  'lr.des: {:f} lr.gen: {:f} time: {:.2f}s'.format(epoch, des_loss_avg, gen_loss_avg, mse_avg,
+                  self.lr_des.eval(), self.lr_gen.eval(), end_time - start_time))
             writer.add_summary(summary, epoch)
             writer.flush()
 
