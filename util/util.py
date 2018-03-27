@@ -7,7 +7,7 @@ import tensorflow as tf
 import scipy.misc
 
 
-def init_root_log():
+def init_log(path):
     log = logging.getLogger()
     log.setLevel(logging.INFO)
 
@@ -18,19 +18,14 @@ def init_root_log():
     cs.setFormatter(formatter)
     log.addHandler(cs)
 
-
-def init_tf_log(path):
     log = logging.getLogger('tensorflow')
     log.setLevel(logging.INFO)
     log.handlers = []
-
-    formatter = logging.Formatter('%(message)s')
 
     fh = logging.FileHandler(path)
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(formatter)
     log.addHandler(fh)
-
 
 def make_dir(dir):
     if not tf.gfile.Exists(dir):

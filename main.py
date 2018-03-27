@@ -3,7 +3,7 @@ from datetime import datetime
 import tensorflow as tf
 
 from model.model import CoopNets
-from util.util import make_dir, init_root_log, init_tf_log
+from util.util import make_dir, init_log
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -45,8 +45,7 @@ def main(_):
     model_dir = make_dir(os.path.join(output_dir, 'checkpoints'))
     test_dir = make_dir(os.path.join(output_dir, 'test'))
 
-    init_root_log()
-    init_tf_log(os.path.join(output_dir, 'log', 'output.log'))
+    init_log(os.path.join(output_dir, 'log', 'output.log'))
 
     model = CoopNets(
         num_epochs=FLAGS.num_epochs,
