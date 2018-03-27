@@ -47,6 +47,8 @@ class CoopNets(object):
 
         self.z_size = 100
 
+    def build_model(self):
+
         self.syn = tf.placeholder(shape=[None, self.image_size, self.image_size, 3], dtype=tf.float32, name='syn')
         self.obs = tf.placeholder(shape=[None, self.image_size, self.image_size, 3], dtype=tf.float32, name='obs')
         self.z = tf.placeholder(shape=[None, self.z_size], dtype=tf.float32, name='z')
@@ -121,7 +123,7 @@ class CoopNets(object):
 
     def train(self, sess):
 
-        tf.reset_default_graph()
+        self.build_model()
 
         # Prepare training data
         train_data = DataSet(self.data_path, image_size=self.image_size)
