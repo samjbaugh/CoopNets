@@ -5,9 +5,9 @@ from __future__ import print_function
 import os
 import time
 
-from model.utils.interpolate import *
-from model.utils.custom_ops import *
-from model.utils.data_io import DataSet, saveSampleResults
+from model.interpolate import *
+from model.custom_ops import *
+from model.data_io import DataSet, saveSampleResults
 
 
 class CoopNets(object):
@@ -55,36 +55,28 @@ class CoopNets(object):
         self.z = tf.placeholder(shape=[None, self.z_size], dtype=tf.float32, name='z')
 
     def build_model(self):
-        self.gen_res = self.generator(self.z, reuse=False)
+        self.gen_res = self.generator(self.z)
 
         obs_res = self.descriptor(self.obs)
         syn_res = self.descriptor(self.syn)
 
-        self.recon_err = tf.reduce_mean(
-            tf.pow(tf.subtract(tf.reduce_mean(self.syn, axis=0), tf.reduce_mean(self.obs, axis=0)), 2))
+        self.recon_err = tf.reduce_mean(tf.pow(tf.subtract(tf.reduce_mean(self.syn, axis=0), tf.reduce_mean(self.obs, axis=0)), 2))
         self.recon_err_mean, self.recon_err_update = tf.contrib.metrics.streaming_mean(self.recon_err)
 
         # descriptor variables
         des_vars = [var for var in tf.trainable_variables() if var.name.startswith('des')]
-
         self.des_loss = tf.reduce_mean(tf.subtract(tf.reduce_mean(syn_res, axis=0), tf.reduce_mean(obs_res, axis=0)))
         self.des_loss_mean, self.des_loss_update = tf.contrib.metrics.streaming_mean(self.des_loss)
-
         des_optim = tf.train.AdamOptimizer(self.d_lr, beta1=self.beta1)
         des_grads_vars = des_optim.compute_gradients(self.des_loss, var_list=des_vars)
-        des_grads = [tf.reduce_mean(tf.abs(grad)) for (grad, var) in des_grads_vars if '/w' in var.name]
-        # update by mean of gradients
         self.apply_d_grads = des_optim.apply_gradients(des_grads_vars)
 
         # generator variables
         gen_vars = [var for var in tf.trainable_variables() if var.name.startswith('gen')]
-
         self.gen_loss = tf.reduce_mean(1.0 / (2 * self.sigma2 * self.sigma2) * tf.square(self.obs - self.gen_res))
         self.gen_loss_mean, self.gen_loss_update = tf.contrib.metrics.streaming_mean(self.gen_loss)
-
         gen_optim = tf.train.AdamOptimizer(self.g_lr, beta1=self.beta1)
         gen_grads_vars = gen_optim.compute_gradients(self.gen_loss, var_list=gen_vars)
-        gen_grads = [tf.reduce_mean(tf.abs(grad)) for (grad, var) in gen_grads_vars if '/w' in var.name]
         self.apply_g_grads = gen_optim.apply_gradients(gen_grads_vars)
 
         # symbolic langevins
@@ -103,7 +95,7 @@ class CoopNets(object):
 
         def body(i, syn):
             noise = tf.random_normal(shape=[self.num_chain, self.image_size, self.image_size, 3], name='noise')
-            syn_res = self.descriptor(syn, reuse=True)
+            syn_res = self.descriptor(syn)
             grad = tf.gradients(syn_res, syn, name='grad_des')[0]
             syn = syn - 0.5 * self.delta1 * self.delta1 * (syn / self.sigma1 / self.sigma1 - grad) + self.delta1 * noise
             return tf.add(i, 1), syn
@@ -142,7 +134,6 @@ class CoopNets(object):
         sample_results = np.random.randn(self.num_chain * num_batches, self.image_size, self.image_size, 3)
 
         saver = tf.train.Saver(max_to_keep=50)
-
         writer = tf.summary.FileWriter(self.log_dir, sess.graph)
 
         # make graph immutable
@@ -243,8 +234,8 @@ class CoopNets(object):
             else:
                 return NotImplementedError
 
-    def generator(self, inputs, reuse=False, is_training=True):
-        with tf.variable_scope('gen', reuse=reuse):
+    def generator(self, inputs, is_training=True):
+        with tf.variable_scope('gen', reuse=tf.AUTO_REUSE):
             if self.type == 'object':
                 inputs = tf.reshape(inputs, [-1, 1, 1, self.z_size])
                 convt1 = convt2d(inputs, (None, self.image_size // 16, self.image_size // 16, 512), kernal=(4, 4)
