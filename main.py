@@ -3,7 +3,7 @@ from datetime import datetime
 import tensorflow as tf
 
 from model.model import CoopNets
-from util.util import make_dir, init_tf_log
+from util.util import make_dir, init_root_log, init_tf_log
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -68,4 +68,5 @@ def main(_):
 
 
 if __name__ == '__main__':
+    init_root_log()
     tf.app.run()

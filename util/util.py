@@ -1,9 +1,22 @@
+import sys
 import math
 import logging
 
 import numpy as np
 import tensorflow as tf
 import scipy.misc
+
+
+def init_root_log():
+    log = logging.getLogger()
+    log.setLevel(logging.INFO)
+
+    formatter = logging.Formatter('%(message)s')
+
+    cs = logging.StreamHandler(sys.stdout)
+    cs.setLevel(logging.INFO)
+    cs.setFormatter(formatter)
+    log.addHandler(cs)
 
 
 def init_tf_log(path):
