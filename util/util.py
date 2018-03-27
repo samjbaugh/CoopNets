@@ -9,7 +9,9 @@ import scipy.misc
 def init_tf_log(path):
     log = logging.getLogger('tensorflow')
     log.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(message)s')
+
+    formatter = logging.Formatter('%(message)s')
+
     fh = logging.FileHandler(path)
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(formatter)

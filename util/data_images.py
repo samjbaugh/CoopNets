@@ -1,5 +1,8 @@
 import os
+
+import tensorflow as tf
 import numpy as np
+
 from PIL import Image
 
 
@@ -13,7 +16,7 @@ class DataSet(object):
         self.imgList.sort()
         self.image_size = image_size
         self.images = np.zeros((len(self.imgList), image_size, image_size, 3)).astype(float)
-        print('Loading dataset: {}'.format(data_path))
+        tf.logging.info('Loading dataset: {}'.format(data_path))
         for i in range(len(self.imgList)):
             image = Image.open(os.path.join(self.root_dir, self.imgList[i])).convert('RGB')
             image = image.resize((self.image_size, self.image_size))
@@ -22,7 +25,7 @@ class DataSet(object):
             min_val = image.min()
             image = (image - min_val) / (max_val - min_val) * 2 - 1
             self.images[i] = image
-        print('Data loaded, shape: {}'.format(self.images.shape))
+        tf.logging.info('Data loaded, shape: {}'.format(self.images.shape))
 
     def data(self):
         return self.images
