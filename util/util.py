@@ -11,21 +11,24 @@ def init_log(path):
     log = logging.getLogger()
     log.setLevel(logging.INFO)
 
-    formatter = logging.Formatter('%(message)s')
+    formatter_cs = logging.Formatter('%(message)s')
 
     cs = logging.StreamHandler(sys.stdout)
     cs.setLevel(logging.INFO)
-    cs.setFormatter(formatter)
+    cs.setFormatter(formatter_cs)
     log.addHandler(cs)
 
     log = logging.getLogger('tensorflow')
     log.setLevel(logging.INFO)
     log.handlers = []
 
+    formatter_fh = logging.Formatter('%(asctime)s - %(message)s')
+
     fh = logging.FileHandler(path)
     fh.setLevel(logging.DEBUG)
-    fh.setFormatter(formatter)
+    fh.setFormatter(formatter_fh)
     log.addHandler(fh)
+
 
 def make_dir(dir):
     if not tf.gfile.Exists(dir):

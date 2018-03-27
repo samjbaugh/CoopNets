@@ -177,8 +177,6 @@ class CoopNets(object):
                 tf.logging.debug('Epoch #{:d}, [{:2d}]/[{:2d}], descriptor loss: {:.4f}, generator loss: {:.4f}, '
                           'L2 distance: {:4.4f}'.format(epoch, i + 1, num_batches, d_loss.mean(), g_loss.mean(), mse))
                 if i == 0 and epoch % self.log_step == 0:
-                    if not os.path.exists(self.sample_dir):
-                        os.makedirs(self.sample_dir)
                     save_sample_results(syn, "%s/des%03d.png" % (self.sample_dir, epoch), col_num=self.n_tile_col)
                     save_sample_results(g_res, "%s/gen%03d.png" % (self.sample_dir, epoch), col_num=self.n_tile_col)
 
