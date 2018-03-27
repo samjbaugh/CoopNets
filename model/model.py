@@ -5,25 +5,25 @@ from __future__ import print_function
 import os
 import time
 
-from model.interpolate import *
-from model.custom_ops import *
-from util.data_images import DataSet
-from util.util import save_sample_results
+from model.utils.interpolate import *
+from model.utils.custom_ops import *
+from model.utils.data_io import DataSet, saveSampleResults
 
 
 class CoopNets(object):
-    def __init__(self, num_epochs=200, image_size=64, batch_size=100, n_tile_row=12, n_tile_col=12,
+    def __init__(self, num_epochs=200, image_size=64, batch_size=100, nTileRow=12, nTileCol=12, net_type='object',
                  d_lr=0.001, g_lr=0.0001, beta1=0.5,
                  des_step_size=0.002, des_sample_steps=10, des_refsig=0.016,
                  gen_step_size=0.1, gen_sample_steps=0, gen_refsig=0.3,
                  data_path='/tmp/data/', log_step=10, category='rock',
                  sample_dir='./synthesis', model_dir='./checkpoints', log_dir='./log', test_dir='./test'):
+        self.type = net_type
         self.num_epochs = num_epochs
         self.batch_size = batch_size
         self.image_size = image_size
-        self.n_tile_row = n_tile_row
-        self.n_tile_col = n_tile_col
-        self.num_chain = n_tile_row * n_tile_col
+        self.nTileRow = nTileRow
+        self.nTileCol = nTileCol
+        self.num_chain = nTileRow * nTileCol
         self.beta1 = beta1
 
         self.d_lr = d_lr
@@ -43,35 +43,51 @@ class CoopNets(object):
         self.model_dir = model_dir
         self.test_dir = test_dir
 
-        self.z_size = 100
+        if self.type == 'texture':
+            self.z_size = 49
+        elif self.type == 'object':
+            self.z_size = 100
+        elif self.type == 'object_small':
+            self.z_size = 2
 
         self.syn = tf.placeholder(shape=[None, self.image_size, self.image_size, 3], dtype=tf.float32, name='syn')
         self.obs = tf.placeholder(shape=[None, self.image_size, self.image_size, 3], dtype=tf.float32, name='obs')
         self.z = tf.placeholder(shape=[None, self.z_size], dtype=tf.float32, name='z')
 
+        self.debug = False
+
     def build_model(self):
-        self.gen_res = self.generator(self.z)
+        self.gen_res = self.generator(self.z, reuse=False)
 
         obs_res = self.descriptor(self.obs)
         syn_res = self.descriptor(self.syn)
 
-        self.recon_err = tf.reduce_mean(tf.pow(tf.subtract(tf.reduce_mean(self.syn, axis=0), tf.reduce_mean(self.obs, axis=0)), 2))
+        self.recon_err = tf.reduce_mean(
+            tf.pow(tf.subtract(tf.reduce_mean(self.syn, axis=0), tf.reduce_mean(self.obs, axis=0)), 2))
         self.recon_err_mean, self.recon_err_update = tf.contrib.metrics.streaming_mean(self.recon_err)
 
         # descriptor variables
         des_vars = [var for var in tf.trainable_variables() if var.name.startswith('des')]
-        self.des_loss = tf.reduce_mean(tf.subtract(tf.reduce_mean(syn_res, axis=0), tf.reduce_mean(obs_res, axis=0)))
+
+        self.des_loss = tf.subtract(tf.reduce_mean(syn_res, axis=0), tf.reduce_mean(obs_res, axis=0))
         self.des_loss_mean, self.des_loss_update = tf.contrib.metrics.streaming_mean(self.des_loss)
+
         des_optim = tf.train.AdamOptimizer(self.d_lr, beta1=self.beta1)
         des_grads_vars = des_optim.compute_gradients(self.des_loss, var_list=des_vars)
+        des_grads = [tf.reduce_mean(tf.abs(grad)) for (grad, var) in des_grads_vars if '/w' in var.name]
+        # update by mean of gradients
         self.apply_d_grads = des_optim.apply_gradients(des_grads_vars)
 
         # generator variables
         gen_vars = [var for var in tf.trainable_variables() if var.name.startswith('gen')]
-        self.gen_loss = tf.reduce_mean(1.0 / (2 * self.sigma2 * self.sigma2) * tf.square(self.obs - self.gen_res))
+
+        self.gen_loss = tf.reduce_mean(1.0 / (2 * self.sigma2 * self.sigma2) * tf.square(self.obs - self.gen_res),
+                                       axis=0)
         self.gen_loss_mean, self.gen_loss_update = tf.contrib.metrics.streaming_mean(self.gen_loss)
+
         gen_optim = tf.train.AdamOptimizer(self.g_lr, beta1=self.beta1)
         gen_grads_vars = gen_optim.compute_gradients(self.gen_loss, var_list=gen_vars)
+        gen_grads = [tf.reduce_mean(tf.abs(grad)) for (grad, var) in gen_grads_vars if '/w' in var.name]
         self.apply_g_grads = gen_optim.apply_gradients(gen_grads_vars)
 
         # symbolic langevins
@@ -90,7 +106,7 @@ class CoopNets(object):
 
         def body(i, syn):
             noise = tf.random_normal(shape=[self.num_chain, self.image_size, self.image_size, 3], name='noise')
-            syn_res = self.descriptor(syn)
+            syn_res = self.descriptor(syn, reuse=True)
             grad = tf.gradients(syn_res, syn, name='grad_des')[0]
             syn = syn - 0.5 * self.delta1 * self.delta1 * (syn / self.sigma1 / self.sigma1 - grad) + self.delta1 * noise
             return tf.add(i, 1), syn
@@ -106,7 +122,10 @@ class CoopNets(object):
 
         def body(i, z):
             noise = tf.random_normal(shape=[self.num_chain, self.z_size], name='noise')
-            grad = tf.gradients(self.gen_loss, z_arg, name='grad_gen')[0]
+            gen_res = self.generator(z, reuse=True)
+            gen_loss = tf.reduce_mean(1.0 / (2 * self.sigma2 * self.sigma2) * tf.square(self.obs - gen_res),
+                                       axis=0)
+            grad = tf.gradients(gen_loss, z, name='grad_gen')[0]
             z = z - 0.5 * self.delta2 * self.delta2 * (z + grad) + self.delta2 * noise
             return tf.add(i, 1), z
 
@@ -129,6 +148,7 @@ class CoopNets(object):
         sample_results = np.random.randn(self.num_chain * num_batches, self.image_size, self.image_size, 3)
 
         saver = tf.train.Saver(max_to_keep=50)
+
         writer = tf.summary.FileWriter(self.log_dir, sess.graph)
 
         # make graph immutable
@@ -166,18 +186,19 @@ class CoopNets(object):
                                feed_dict={self.obs: obs_data, self.syn: syn})[0]
 
                 sample_results[i * self.num_chain:(i + 1) * self.num_chain] = syn
-                print('Epoch #{:d}, [{:2d}]/[{:2d}], descriptor loss: {:.4f}, generator loss: {:.4f}, '
-                      'L2 distance: {:4.4f}'.format(epoch, i+1, num_batches, d_loss, g_loss, mse))
+                if self.debug:
+                    print('Epoch #{:d}, [{:2d}]/[{:2d}], descriptor loss: {:.4f}, generator loss: {:.4f}, '
+                          'L2 distance: {:4.4f}'.format(epoch, i + 1, num_batches, d_loss.mean(), g_loss.mean(), mse))
                 if i == 0 and epoch % self.log_step == 0:
                     if not os.path.exists(self.sample_dir):
                         os.makedirs(self.sample_dir)
-                    save_sample_results(syn, "%s/des%03d.png" % (self.sample_dir, epoch), col_num=self.n_tile_col)
-                    save_sample_results(g_res, "%s/gen%03d.png" % (self.sample_dir, epoch), col_num=self.n_tile_col)
+                    saveSampleResults(syn, "%s/des%03d.png" % (self.sample_dir, epoch), col_num=self.nTileCol)
+                    saveSampleResults(g_res, "%s/gen%03d.png" % (self.sample_dir, epoch), col_num=self.nTileCol)
 
             [des_loss_avg, gen_loss_avg, mse_avg, summary] = sess.run([self.des_loss_mean, self.gen_loss_mean,
                                                                        self.recon_err_mean, self.summary_op])
             end_time = time.time()
-            print('Epoch #{:d}, avg. descriptor loss: {:.4f}, avg. generator loss: {:.4f}, avg. L2 distance: {:4.4f}, '
+            print('Epoch #{:d}, avg.descriptor loss: {:.4f}, avg.generator loss: {:.4f}, avg.L2 distance: {:4.4f}, '
                   'time: {:.2f}s'.format(epoch, des_loss_avg, gen_loss_avg, mse_avg, end_time - start_time))
             writer.add_summary(summary, epoch)
             writer.flush()
@@ -203,54 +224,60 @@ class CoopNets(object):
         for i in range(num_batches):
             z_vec = np.random.randn(min(sample_size, self.num_chain), self.z_size)
             g_res = sess.run(gen_res, feed_dict={self.z: z_vec})
-            save_sample_results(g_res, "%s/gen%03d.png" % (self.test_dir, i), col_num=self.n_tile_col)
+            saveSampleResults(g_res, "%s/gen%03d.png" % (self.test_dir, i), col_num=self.nTileCol)
 
             # output interpolation results
-            interp_z = linear_interpolator(z_vec, npairs=self.n_tile_row, ninterp=self.n_tile_col)
+            interp_z = linear_interpolator(z_vec, npairs=self.nTileRow, ninterp=self.nTileCol)
             interp = sess.run(gen_res, feed_dict={self.z: interp_z})
-            save_sample_results(interp, "%s/interp%03d.png" % (self.test_dir, i), col_num=self.n_tile_col)
+            saveSampleResults(interp, "%s/interp%03d.png" % (self.test_dir, i), col_num=self.nTileCol)
             sample_size = sample_size - self.num_chain
 
     def descriptor(self, inputs):
         with tf.variable_scope('des', reuse=tf.AUTO_REUSE):
-            conv1 = conv2d(inputs, 64, kernal=(5, 5), strides=(2, 2), padding="SAME", activate_fn=leaky_relu,
-                           name="conv1")
+            if self.type == 'object':
+                conv1 = conv2d(inputs, 64, kernal=(5, 5), strides=(2, 2), padding="SAME", activate_fn=leaky_relu,
+                               name="conv1")
 
-            conv2 = conv2d(conv1, 128, kernal=(3, 3), strides=(2, 2), padding="SAME", activate_fn=leaky_relu,
-                           name="conv2")
+                conv2 = conv2d(conv1, 128, kernal=(3, 3), strides=(2, 2), padding="SAME", activate_fn=leaky_relu,
+                               name="conv2")
 
-            conv3 = conv2d(conv2, 256, kernal=(3, 3), strides=(1, 1), padding="SAME", activate_fn=leaky_relu,
-                           name="conv3")
+                conv3 = conv2d(conv2, 256, kernal=(3, 3), strides=(1, 1), padding="SAME", activate_fn=leaky_relu,
+                               name="conv3")
 
-            fc = fully_connected(conv3, 100, name="fc")
+                fc = fully_connected(conv3, 100, name="fc")
 
-            return fc
+                return fc
+            else:
+                return NotImplementedError
 
-    def generator(self, inputs, is_training=True):
-        with tf.variable_scope('gen', reuse=tf.AUTO_REUSE):
-            inputs = tf.reshape(inputs, [-1, 1, 1, self.z_size])
-            convt1 = convt2d(inputs, (None, self.image_size // 16, self.image_size // 16, 512), kernal=(4, 4)
-                             , strides=(1, 1), padding="VALID", name="convt1")
-            convt1 = tf.contrib.layers.batch_norm(convt1, is_training=is_training)
-            convt1 = leaky_relu(convt1)
+    def generator(self, inputs, reuse=False, is_training=True):
+        with tf.variable_scope('gen', reuse=reuse):
+            if self.type == 'object':
+                inputs = tf.reshape(inputs, [-1, 1, 1, self.z_size])
+                convt1 = convt2d(inputs, (None, self.image_size // 16, self.image_size // 16, 512), kernal=(4, 4)
+                                 , strides=(1, 1), padding="VALID", name="convt1")
+                convt1 = tf.contrib.layers.batch_norm(convt1, is_training=is_training)
+                convt1 = leaky_relu(convt1)
 
-            convt2 = convt2d(convt1, (None, self.image_size // 8, self.image_size // 8, 256), kernal=(5, 5)
-                             , strides=(2, 2), padding="SAME", name="convt2")
-            convt2 = tf.contrib.layers.batch_norm(convt2, is_training=is_training)
-            convt2 = leaky_relu(convt2)
+                convt2 = convt2d(convt1, (None, self.image_size // 8, self.image_size // 8, 256), kernal=(5, 5)
+                                 , strides=(2, 2), padding="SAME", name="convt2")
+                convt2 = tf.contrib.layers.batch_norm(convt2, is_training=is_training)
+                convt2 = leaky_relu(convt2)
 
-            convt3 = convt2d(convt2, (None, self.image_size // 4, self.image_size // 4, 128), kernal=(5, 5)
-                             , strides=(2, 2), padding="SAME", name="convt3")
-            convt3 = tf.contrib.layers.batch_norm(convt3, is_training=is_training)
-            convt3 = leaky_relu(convt3)
+                convt3 = convt2d(convt2, (None, self.image_size // 4, self.image_size // 4, 128), kernal=(5, 5)
+                                 , strides=(2, 2), padding="SAME", name="convt3")
+                convt3 = tf.contrib.layers.batch_norm(convt3, is_training=is_training)
+                convt3 = leaky_relu(convt3)
 
-            convt4 = convt2d(convt3, (None, self.image_size // 2, self.image_size // 2, 64), kernal=(5, 5)
-                             , strides=(2, 2), padding="SAME", name="convt4")
-            convt4 = tf.contrib.layers.batch_norm(convt4, is_training=is_training)
-            convt4 = leaky_relu(convt4)
+                convt4 = convt2d(convt3, (None, self.image_size // 2, self.image_size // 2, 64), kernal=(5, 5)
+                                 , strides=(2, 2), padding="SAME", name="convt4")
+                convt4 = tf.contrib.layers.batch_norm(convt4, is_training=is_training)
+                convt4 = leaky_relu(convt4)
 
-            convt5 = convt2d(convt4, (None, self.image_size, self.image_size, 3), kernal=(5, 5)
-                             , strides=(2, 2), padding="SAME", name="convt5")
-            convt5 = tf.nn.tanh(convt5)
+                convt5 = convt2d(convt4, (None, self.image_size, self.image_size, 3), kernal=(5, 5)
+                                 , strides=(2, 2), padding="SAME", name="convt5")
+                convt5 = tf.nn.tanh(convt5)
 
-            return convt5
+                return convt5
+            else:
+                return NotImplementedError
