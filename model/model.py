@@ -19,7 +19,7 @@ class CoopNets(object):
                  d_lr=0.001, g_lr=0.0001, beta1=0.5,
                  des_step_size=0.002, des_sample_steps=10, des_refsig=0.016,
                  gen_step_size=0.1, gen_sample_steps=0, gen_refsig=0.3,
-                 data_path='/tmp/data/', log_step=10, category='rock',
+                 data_path='/tmp/data/', log_step=10, category='rock', cdim=1,
                  sample_dir='./synthesis', model_dir='./checkpoints', log_dir='./log', test_dir='./test'):
         self.num_epochs = num_epochs
         self.batch_size = batch_size
@@ -28,6 +28,7 @@ class CoopNets(object):
         self.n_tile_col = n_tile_col
         self.num_chain = n_tile_row * n_tile_col
         self.beta1 = beta1
+        self.cdim = cdim
 
         self.d_lr = d_lr
         self.g_lr = g_lr
@@ -50,8 +51,8 @@ class CoopNets(object):
 
     def build_model(self):
 
-        self.syn = tf.placeholder(shape=[None, self.image_size, self.image_size, 3], dtype=tf.float32, name='syn')
-        self.obs = tf.placeholder(shape=[None, self.image_size, self.image_size, 3], dtype=tf.float32, name='obs')
+        self.syn = tf.placeholder(shape=[None, self.image_size, self.image_size, self.cdim], dtype=tf.float32, name='syn')
+        self.obs = tf.placeholder(shape=[None, self.image_size, self.image_size, self.cdim], dtype=tf.float32, name='obs')
         self.z = tf.placeholder(shape=[None, self.z_size], dtype=tf.float32, name='z')
 
         self.gen_res = self.generator(self.z)
@@ -97,7 +98,7 @@ class CoopNets(object):
             return tf.less(i, self.t1)
 
         def body(i, syn):
-            noise = tf.random_normal(shape=[self.num_chain, self.image_size, self.image_size, 3], name='noise')
+            noise = tf.random_normal(shape=[self.num_chain, self.image_size, self.image_size, self.cdim], name='noise')
             syn_res = self.descriptor(syn)
             grad = tf.gradients(syn_res, syn, name='grad_des')[0]
             syn = syn - 0.5 * self.delta1 * self.delta1 * (syn / self.sigma1 / self.sigma1 - grad) + self.delta1 * noise
@@ -130,15 +131,25 @@ class CoopNets(object):
 
         self.build_model()
 
-        # Prepare training data
-        train_data = DataSet(self.data_path, image_size=self.image_size)
+        from mnist import MNIST
+        mndata = MNIST('./Image/MNIST')
+        subsample_size=9
+        mnist_images, _ = mndata.load_training()
+        mnist_images = np.reshape(mnist_images, [-1, 28, 28, 1])[0:subsample_size]
+        mnist_images = mnist_images / 256
+        train_data = np.zeros((subsample_size, 32, 32, 1))
+        train_data[:, 2:30, 2:30, :] = mnist_images
         num_batches = int(math.ceil(len(train_data) / self.batch_size))
+
+        # Prepare training data
+        #train_data = DataSet(self.data_path, image_size=self.image_size)
+        #num_batches = int(math.ceil(len(train_data) / self.batch_size))
 
         # initialize training
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
 
-        sample_results = np.random.randn(self.num_chain * num_batches, self.image_size, self.image_size, 3)
+        sample_results = np.random.randn(self.num_chain * num_batches, self.image_size, self.image_size, self.cdim)
 
         saver = tf.train.Saver(max_to_keep=50)
 
@@ -238,29 +249,49 @@ class CoopNets(object):
 
     def generator(self, inputs, is_training=True):
         with tf.variable_scope('gen', reuse=tf.AUTO_REUSE):
+            # inputs = tf.reshape(inputs, [-1, 1, 1, self.z_size])
+            # convt1 = convt2d(inputs, (None, self.image_size // 16, self.image_size // 16, 512), kernal=(4, 4)
+            #                  , strides=(1, 1), padding="VALID", name="convt1")
+            # convt1 = tf.contrib.layers.batch_norm(convt1, is_training=is_training)
+            # convt1 = leaky_relu(convt1)
+            #
+            # convt2 = convt2d(convt1, (None, self.image_size // 8, self.image_size // 8, 256), kernal=(5, 5)
+            #                  , strides=(2, 2), padding="SAME", name="convt2")
+            # convt2 = tf.contrib.layers.batch_norm(convt2, is_training=is_training)
+            # convt2 = leaky_relu(convt2)
+            #
+            # convt3 = convt2d(convt2, (None, self.image_size // 4, self.image_size // 4, 128), kernal=(5, 5)
+            #                  , strides=(2, 2), padding="SAME", name="convt3")
+            # convt3 = tf.contrib.layers.batch_norm(convt3, is_training=is_training)
+            # convt3 = leaky_relu(convt3)
+            #
+            # convt4 = convt2d(convt3, (None, self.image_size // 2, self.image_size // 2, 64), kernal=(5, 5)
+            #                  , strides=(2, 2), padding="SAME", name="convt4")
+            # convt4 = tf.contrib.layers.batch_norm(convt4, is_training=is_training)
+            # convt4 = leaky_relu(convt4)
+            #
+            # convt5 = convt2d(convt4, (None, self.image_size, self.image_size, 3), kernal=(5, 5)
+            #                  , strides=(2, 2), padding="SAME", name="convt5")
+            # convt5 = tf.nn.tanh(convt5)
             inputs = tf.reshape(inputs, [-1, 1, 1, self.z_size])
-            convt1 = convt2d(inputs, (None, self.image_size // 16, self.image_size // 16, 512), kernal=(4, 4)
+
+            convt1 = convt2d(inputs, (None, self.image_size // (2**3), self.image_size // (2**3), 128), kernal=(4, 4)
                              , strides=(1, 1), padding="VALID", name="convt1")
             convt1 = tf.contrib.layers.batch_norm(convt1, is_training=is_training)
             convt1 = leaky_relu(convt1)
 
-            convt2 = convt2d(convt1, (None, self.image_size // 8, self.image_size // 8, 256), kernal=(5, 5)
+            convt2 = convt2d(convt1, (None, self.image_size // (2**2), self.image_size // (2**2), 64), kernal=(5, 5)
                              , strides=(2, 2), padding="SAME", name="convt2")
             convt2 = tf.contrib.layers.batch_norm(convt2, is_training=is_training)
             convt2 = leaky_relu(convt2)
 
-            convt3 = convt2d(convt2, (None, self.image_size // 4, self.image_size // 4, 128), kernal=(5, 5)
+            convt3 = convt2d(convt2, (None, self.image_size // (2**1), self.image_size // (2**1), 32), kernal=(5, 5)
                              , strides=(2, 2), padding="SAME", name="convt3")
             convt3 = tf.contrib.layers.batch_norm(convt3, is_training=is_training)
             convt3 = leaky_relu(convt3)
 
-            convt4 = convt2d(convt3, (None, self.image_size // 2, self.image_size // 2, 64), kernal=(5, 5)
+            convt4 = convt2d(convt3, (None, self.image_size // (2**0), self.image_size // (2**0), self.cdim), kernal=(5, 5)
                              , strides=(2, 2), padding="SAME", name="convt4")
-            convt4 = tf.contrib.layers.batch_norm(convt4, is_training=is_training)
-            convt4 = leaky_relu(convt4)
-
-            convt5 = convt2d(convt4, (None, self.image_size, self.image_size, 3), kernal=(5, 5)
-                             , strides=(2, 2), padding="SAME", name="convt5")
-            convt5 = tf.nn.tanh(convt5)
+            convt4 = tf.nn.tanh(convt4)
 
             return convt5

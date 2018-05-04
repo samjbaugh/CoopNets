@@ -7,12 +7,13 @@ from util.io import make_dir, init_log
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.flags.DEFINE_integer('image_size', 64, 'Image size to rescale images')
-tf.flags.DEFINE_integer('batch_size', 100, 'Batch size of training images')
-tf.flags.DEFINE_integer('num_epochs', 250, 'Number of epochs to train')
-tf.flags.DEFINE_integer('n_tile_row', 12, 'Row number of synthesized images')
-tf.flags.DEFINE_integer('n_tile_col', 12, 'Column number of synthesized images')
+tf.flags.DEFINE_integer('image_size', 32, 'Image size to rescale images')
+tf.flags.DEFINE_integer('batch_size', 9, 'Batch size of training images')
+tf.flags.DEFINE_integer('num_epochs', 100, 'Number of epochs to train')
+tf.flags.DEFINE_integer('n_tile_row', 3, 'Row number of synthesized images')
+tf.flags.DEFINE_integer('n_tile_col', 3, 'Column number of synthesized images')
 tf.flags.DEFINE_float('beta1', 0.5, 'Momentum term of adam')
+tf.flags.DEFINE_float('cdim', 1, 'Momentum term of adam')
 
 # parameters for descriptor
 tf.flags.DEFINE_float('d_lr', 0.01, 'Initial learning rate for descriptor')
