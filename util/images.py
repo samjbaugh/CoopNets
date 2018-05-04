@@ -30,7 +30,7 @@ def img2cell(images, row_num=10, col_num=10, margin_syn=2):
         idx = i % (col_num * row_num)
         ir = int(math.floor(idx / col_num))
         ic = idx % col_num
-        temp = clip_by_value(np.squeeze(images[i]), -1, 1)
+        temp = clip_by_value(images[i], -1, 1)
         temp = (temp + 1) / 2 * 255
         temp = clip_by_value(np.round(temp), min=0, max=255)
         low = np.min(temp, axis=(0, 1, 2))

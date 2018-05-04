@@ -18,7 +18,7 @@ tf.flags.DEFINE_float('cdim', 1, 'Momentum term of adam')
 # parameters for descriptor
 tf.flags.DEFINE_float('d_lr', 0.01, 'Initial learning rate for descriptor')
 tf.flags.DEFINE_float('des_refsig', 0.016, 'Standard deviation for reference distribution of descriptor')
-tf.flags.DEFINE_integer('des_sample_steps', 10, 'Sample steps for Langevin dynamics of descriptor')
+tf.flags.DEFINE_integer('des_sample_steps', 70, 'Sample steps for Langevin dynamics of descriptor')
 tf.flags.DEFINE_float('des_step_size', 0.002, 'Step size for descriptor Langevin dynamics')
 
 # parameters for generator
@@ -26,8 +26,8 @@ tf.flags.DEFINE_float('g_lr', 0.0001, 'Initial learning rate for generator')
 tf.flags.DEFINE_float('gen_refsig', 0.3, 'Standard deviation for reference distribution of generator')
 tf.flags.DEFINE_integer('gen_sample_steps', 0, 'Sample steps for Langevin dynamics of generator')
 tf.flags.DEFINE_float('gen_step_size', 0.1, 'Step size for generator Langevin dynamics')
-tf.flags.DEFINE_string('data_dir', './data/scene', 'The data directory')
-tf.flags.DEFINE_string('category', 'alp', 'The name of dataset')
+tf.flags.DEFINE_string('data_dir', './Image', 'The data directory')
+tf.flags.DEFINE_string('category', 'mnist', 'The name of dataset')
 
 tf.flags.DEFINE_string('output_dir', './output', 'The output directory for saving results')
 tf.flags.DEFINE_integer('log_step', 10, 'Number of epochs to save output results')
