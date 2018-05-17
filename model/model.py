@@ -15,10 +15,24 @@ from util.tf import get_lr
 
 from mnist import MNIST
 
+def read_nets(file):
+    # read in weights of trained coop nets and store as numpy array w
+    with tf.Session().as_default() as sess:
+        saver = tf.train.import_meta_graph(file + '.meta', clear_devices=True)
+        saver.restore(sess, file)
+
+        gen_w = [var for var in tf.trainable_variables() if var.name.startswith('gen')]
+        des_w = [var for var in tf.trainable_variables() if var.name.startswith('des')]
+        moving_w = [var for var in tf.global_variables() if 'moving' in var.name]
+        gen_w_np, des_w_np, moving_w_np = sess.run([gen_w, des_w, moving_w])
+
+        tf.reset_default_graph()
+        return gen_w_np, des_w_np, moving_w_np
+
 
 class CoopNets(object):
     def __init__(self, num_epochs=200, image_size=64, batch_size=100, n_tile_row=12, n_tile_col=12,
-                 d_lr=0.001, g_lr=0.0001, beta1=0.5,
+                 d_lr=0.01, g_lr=0.0001, beta1=0.5,
                  des_step_size=0.002, des_sample_steps=10, des_refsig=0.016,
                  gen_step_size=0.1, gen_sample_steps=0, gen_refsig=0.3,
                  data_path='/tmp/data/', log_step=10, category='rock', cdim=1,
@@ -59,31 +73,27 @@ class CoopNets(object):
 
         self.gen_res = self.generator(self.z)
 
-        obs_res = self.descriptor(self.obs)
-        syn_res = self.descriptor(self.syn)
+        self.obs_res = self.descriptor(self.obs)
+        self.syn_res = self.descriptor(self.syn)
 
         self.recon_err = tf.reduce_mean(tf.pow(tf.subtract(tf.reduce_mean(self.syn, axis=0), tf.reduce_mean(self.obs, axis=0)), 2))
         self.recon_err_mean, self.recon_err_update = tf.contrib.metrics.streaming_mean(self.recon_err)
 
         # descriptor variables
-        des_vars = [var for var in tf.trainable_variables() if var.name.startswith('des')]
-        self.des_loss = tf.subtract(tf.reduce_mean(syn_res, axis=0), tf.reduce_mean(obs_res, axis=0))
+        self.des_vars = [var for var in tf.trainable_variables() if var.name.startswith('des')]
+        self.des_loss = tf.subtract(tf.reduce_mean(self.syn_res, axis=0), tf.reduce_mean(self.obs_res, axis=0))
         self.des_loss_mean, self.des_loss_update = tf.contrib.metrics.streaming_mean(self.des_loss)
-        des_optim = tf.train.AdamOptimizer(self.d_lr, beta1=self.beta1)
-        des_grads_vars = des_optim.compute_gradients(self.des_loss, var_list=des_vars)
-        self.apply_d_grads = des_optim.apply_gradients(des_grads_vars)
+        self.des_optim = tf.train.AdamOptimizer(self.d_lr, beta1=self.beta1).minimize(self.des_loss, var_list=self.des_vars)
 
         # generator variables
-        gen_vars = [var for var in tf.trainable_variables() if var.name.startswith('gen')]
+        self.gen_vars = [var for var in tf.trainable_variables() if var.name.startswith('gen')]
         self.gen_loss = tf.reduce_mean(1.0 / (2 * self.sigma2 * self.sigma2) * tf.square(self.obs - self.gen_res), axis=0)
         self.gen_loss_mean, self.gen_loss_update = tf.contrib.metrics.streaming_mean(self.gen_loss)
-        gen_optim = tf.train.AdamOptimizer(self.g_lr, beta1=self.beta1)
-        gen_grads_vars = gen_optim.compute_gradients(self.gen_loss, var_list=gen_vars)
-        self.apply_g_grads = gen_optim.apply_gradients(gen_grads_vars)
+        self.gen_optim = tf.train.AdamOptimizer(self.g_lr, beta1=self.beta1).minimize(self.gen_loss, var_list=self.gen_vars)
 
         # learning rates
-        self.lr_des = get_lr(des_optim)
-        self.lr_gen = get_lr(gen_optim)
+        #self.lr_des = get_lr(des_optim)
+        #self.lr_gen = get_lr(gen_optim)
 
         # symbolic langevins
         self.langevin_descriptor = self.langevin_dynamics_descriptor(self.syn)
@@ -129,20 +139,25 @@ class CoopNets(object):
             i, z = tf.while_loop(cond, body, [i, z_arg])
             return z
 
-    def train(self, sess):
+    def train(self, sess, model_number=0):
         self.build_model()
+
+        self.model_number = model_number
 
         # Prepare training data
         #train_data = DataSet(self.data_path, image_size=self.image_size)
 
         from mnist import MNIST
-        mndata = MNIST('./Image/MNIST')
-        subsample_size=9
-        mnist_images, _ = mndata.load_training()
-        mnist_images = np.reshape(mnist_images, [-1, 28, 28, 1])[0:subsample_size]
+        mndata = MNIST('/home/sam/PycharmProjects/CoopNets/Image/MNIST')
+        mnist_images, mnist_labels = mndata.load_training()
+        mnist_labels = np.array(mnist_labels)
+        number_indices = np.append(np.where(mnist_labels==4),np.where(mnist_labels==5))
+        mnist_images = np.reshape(mnist_images, [-1, 28, 28, 1])[number_indices]
         mnist_images = mnist_images / 256
-        train_data = np.zeros((subsample_size, 32, 32, 1))
+        data_len = np.shape(mnist_images)[0]
+        train_data = np.zeros((data_len, 32, 32, 1))
         train_data[:, 2:30, 2:30, :] = mnist_images
+        train_data = train_data[np.random.choice(data_len, data_len)]
         num_batches = int(math.ceil(len(train_data) / self.batch_size))
 
         # initialize training
@@ -157,6 +172,8 @@ class CoopNets(object):
 
         # make graph immutable
         tf.get_default_graph().finalize()
+
+        save_sample_results(train_data[0:self.batch_size], "%s/original_sample.png" % self.sample_dir, col_num=self.n_tile_col)
 
         # store graph in protobuf
         with open(self.model_dir + '/graph.proto', 'w') as f:
@@ -179,34 +196,38 @@ class CoopNets(object):
                 if self.t2 > 0:
                     z_vec = sess.run(self.langevin_generator, feed_dict={self.z: z_vec, self.obs: syn})
                 # Step D2: update D net
-                d_loss = sess.run([self.des_loss, self.des_loss_update, self.apply_d_grads],
+                d_loss = sess.run([self.des_loss, self.des_loss_update, self.des_optim],
                                   feed_dict={self.obs: obs_data, self.syn: syn})[0]
                 # Step G2: update G net
-                g_loss = sess.run([self.gen_loss, self.gen_loss_update, self.apply_g_grads],
+                g_loss = sess.run([self.gen_loss, self.gen_loss_update, self.gen_optim],
                                   feed_dict={self.obs: syn, self.z: z_vec})[0]
 
                 # Metrics
                 mse = sess.run([self.recon_err, self.recon_err_update], feed_dict={self.obs: obs_data, self.syn: syn})[0]
                 sample_results[i * self.num_chain:(i + 1) * self.num_chain] = syn
-                print('Epoch #{:d}, [{:2d}]/[{:2d}], des loss: {:.4f}, gen loss: {:.4f}, '
-                          'L2 distance: {:4.4f}'.format(epoch, i + 1, num_batches, d_loss.mean(), g_loss.mean(), mse))
+                print('Model number: #{:d}, Epoch #{:d}, [{:2d}]/[{:2d}], des loss: {:.4f}, gen loss: {:.4f}, '
+                          'L2 distance: {:4.4f}'.format(self.model_number,epoch, i + 1, num_batches, d_loss.mean(), g_loss.mean(), mse))
                 if i == 0 and epoch % self.log_step == 0:
-                    save_sample_results(syn, "%s/des%03d.png" % (self.sample_dir, epoch), col_num=self.n_tile_col)
-                    save_sample_results(g_res, "%s/gen%03d.png" % (self.sample_dir, epoch), col_num=self.n_tile_col)
+                    save_sample_results(syn, "%s/des_%02d_%03d.png" % (self.sample_dir, self.model_number, epoch), col_num=self.n_tile_col)
+                    #save_sample_results(g_res, "%s/gen%03d.png" % (self.sample_dir, epoch), col_num=self.n_tile_col)
 
             [des_loss_avg, gen_loss_avg, mse_avg, summary] = sess.run([self.des_loss_mean, self.gen_loss_mean,
                                                                        self.recon_err_mean, self.summary_op])
 
             end_time = time.time()
-            tf.logging.info('Epoch #{:d}, avg.des loss: {:.4f}, avg.gen loss: {:.4f}, avg.L2 distance: {:4.4f}, '
-                  'lr.des: {:f} lr.gen: {:f} time: {:.2f}s'.format(epoch, des_loss_avg, gen_loss_avg, mse_avg,
-                  self.lr_des.eval(), self.lr_gen.eval(), end_time - start_time))
+            #tf.logging.info('Epoch #{:d}, avg.des loss: {:.4f}, avg.gen loss: {:.4f}, avg.L2 distance: {:4.4f}, '
+            #      'lr.des: {:f} lr.gen: {:f} time: {:.2f}s'.format(epoch, des_loss_avg, gen_loss_avg, mse_avg,
+            #      self.lr_des.eval(), self.lr_gen.eval(), end_time - start_time))
             writer.add_summary(summary, epoch)
             writer.flush()
 
             if epoch % self.log_step == 0:
                 make_dir(self.model_dir)
                 saver.save(sess, "%s/%s" % (self.model_dir, 'model.ckpt'), global_step=epoch)
+
+        save_sample_results(syn, "%s/des_%02d_%03d.png" % (self.sample_dir, self.model_number, epoch+1),
+                                    col_num=self.n_tile_col)
+        saver.save(sess,"%s/model_final%02d.ckpt" % (self.model_dir, self.model_number))
 
     def test(self, sess, ckpt, sample_size):
         assert ckpt is not None, 'no checkpoint provided.'
@@ -243,7 +264,7 @@ class CoopNets(object):
             conv3 = conv2d(conv2, 256, kernal=(3, 3), strides=(1, 1), padding="SAME", activate_fn=leaky_relu,
                            name="conv3")
 
-            fc = fully_connected(conv3, 100, name="fc")
+            fc = fully_connected(conv3, 1, name="fc")
 
             return fc
 
@@ -278,3 +299,40 @@ class CoopNets(object):
             #convt5 = tf.nn.tanh(convt5)
 
             return convt4
+
+    def sample_ensemble(self, sess, weight_dictionary, number_trained): #ckpt, sample_size):
+
+        self.build_model()
+        self.grad_op = tf.gradients(self.syn_res, self.syn, name='grad_des')[0]
+
+        sess.run(tf.global_variables_initializer())
+        sess.run(tf.local_variables_initializer())
+
+        gen_w = weight_dictionary['gen' + str(0)]
+        for k in range(len(self.gen_vars)):
+            sess.run(self.gen_vars[k].assign(tf.constant(gen_w[k])))
+
+        #z_vec = np.random.randn(self.num_chain, self.z_size)
+        #my_syn = sess.run(self.gen_res,feed_dict={self.z: z_vec})
+        my_syn = np.random.uniform(0, 1, size=(self.batch_size, self.image_size, self.image_size, self.cdim))
+
+        for i in range(self.t1):
+            print('on step '+str(i))
+            noise = np.random.uniform(0, 1, size=np.shape(my_syn))
+            grad = np.zeros(np.shape(my_syn))
+            for j in range(0):
+                des_w = weight_dictionary['des' + str(j)]
+                for k in range(len(self.des_vars)):
+                    sess.run(self.des_vars[k].assign(tf.constant(des_w[k])))
+                g_term = sess.run(self.grad_op, feed_dict={self.syn: my_syn})
+                grad = grad + g_term
+            grad = grad/number_trained
+            if i % 5 == 0:
+                save_sample_results(grad, "%s/grad_term%02d.png" % (self.sample_dir, i),
+                                    col_num=self.n_tile_col)
+                save_sample_results(my_syn, "%s/lang_step%02d.png" % (self.sample_dir, i),
+                                    col_num=self.n_tile_col)
+            my_syn = my_syn - 0.5 * self.delta1 * self.delta1 * (my_syn / self.sigma1 / self.sigma1 - grad) \
+                     + self.delta1 * noise
+        save_sample_results(my_syn, "%s/ensemble.png" % self.sample_dir,
+                                    col_num=self.n_tile_col)
